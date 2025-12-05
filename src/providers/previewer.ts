@@ -43,71 +43,6 @@ class Previewer extends vscode.Disposable {
         this.watchDisposables && this.watchDisposables.length && this.watchDisposables.map(d => d.dispose());
     }
 
-    reset() {
-        this.rendered = null;
-        this.previewPageStatus = "";
-        this.images = [];
-        this.imageError = "";
-        this.error = "";
-    }
-
-    updateWebView(): string {
-        let env = {
-            localize: localize,
-            images: this.images.reduce((p, c) => {
-                if (c.startsWith('data:image/')) {
-                    return `${p}<img src="${c}">`
-                } else {
-                    return `${p}${c.replaceAll('<area ', '<area target="_blank"')}`
-                }
-            }, ""),
-            imageError: "",
-            error: "",
-            status: this.previewPageStatus,
-            // nonce: Math.random().toString(36).substr(2),
-            icon: "file:///" + path.join(extensionPath, "images", "icon.png"),
-            settings: JSON.stringify({
-                zoomUpperLimit: this.zoomUpperLimit,
-                showSpinner: this.status === previewStatus.processing,
-                showSnapIndicators: config.previewSnapIndicators,
-                swapMouseButtons: config.previewSwapMouseButtons,
-            }),
-        };
-        try {
-            switch (this.status) {
-                case previewStatus.default:
-                case previewStatus.error:
-                    env.imageError = this.imageError;
-                    env.error = this.error.replace(/\n/g, "<br />");
-                    this._uiPreview.show("preview.html", env);
-                    break;
-                case previewStatus.processing:
-                    env.error = "";
-                    env.images = ["svg", "png"].reduce((p, c) => {
-                        if (p) return p;
-                        let exported = calculateExportPath(this.rendered, c);
-                        exported = addFileIndex(exported, 0, this.rendered.pageCount);
-                        return fs.existsSync(exported) ? env.images = `<img src="${fileToBase64(exported)}">` : "";
-                    }, "");
-                    this._uiPreview.show("preview.html", env);
-                    break;
-                default:
-                    break;
-            }
-        } catch (error) {
-            return error
-        }
-    }
-    setUIStatus(status: string) {
-        this.previewPageStatus = status;
-    }
-    async update(processingTip: boolean) {
-        if (this.taskKilling) return;
-        await this.killTasks();
-        // console.log("updating...");
-        // do not await doUpdate, so that preview window could open before update task finish.
-        this.doUpdate(processingTip).catch(e => showMessagePanel(e));
-    }
     private killTasks() {
         if (!this.task) return;
         this.task.canceled = true;
@@ -122,20 +57,30 @@ class Previewer extends vscode.Disposable {
             this.taskKilling = false;
         });
     }
+
     private killTask(process: child_process.ChildProcess) {
         return new Promise((resolve, reject) => {
             process.on('exit', (code, sig) => {
                 // console.log(`Killed ${process.pid} with code ${code} and signal ${sig}!`);
                 resolve(true);
             });
-            
+
             if(!process.kill('SIGINT') && process.exitCode != null){
                 // console.log(`Process ${process.pid} exited with status code ${process.exitCode}`);
                 resolve(true);
             }
         })
     }
-    get TargetChanged(): boolean {
+
+    private reset() {
+        this.rendered = null;
+        this.previewPageStatus = "";
+        this.images = [];
+        this.imageError = "";
+        this.error = "";
+    }
+
+    private get TargetChanged(): boolean {
         let current = currentDiagram();
         if (!current) return false;
         let changed = (!this.rendered || !this.rendered.isEqual(current));
@@ -148,6 +93,15 @@ class Previewer extends vscode.Disposable {
         }
         return changed;
     }
+
+    private async update(processingTip: boolean) {
+        if (this.taskKilling) return;
+        await this.killTasks();
+        // console.log("updating...");
+        // do not await doUpdate, so that preview window could open before update task finish.
+        this.doUpdate(processingTip).catch(e => showMessagePanel(e));
+    }
+
     private async doUpdate(processingTip: boolean) {
         let diagram = currentDiagram();
         if (!diagram) {
@@ -206,12 +160,66 @@ class Previewer extends vscode.Disposable {
             }
         );
     }
+
+    private updateWebView(): string {
+        let env = {
+            localize: localize,
+            images: this.images.reduce((p, c) => {
+                if (c.startsWith('data:image/')) {
+                    return `${p}<img src="${c}">`
+                } else {
+                    return `${p}${c.replaceAll('<area ', '<area target="_blank"')}`
+                }
+            }, ""),
+            imageError: "",
+            error: "",
+            status: this.previewPageStatus,
+            // nonce: Math.random().toString(36).substr(2),
+            icon: "file:///" + path.join(extensionPath, "images", "icon.png"),
+            settings: JSON.stringify({
+                zoomUpperLimit: this.zoomUpperLimit,
+                showSpinner: this.status === previewStatus.processing,
+                showSnapIndicators: config.previewSnapIndicators,
+                swapMouseButtons: config.previewSwapMouseButtons,
+            }),
+        };
+        try {
+            switch (this.status) {
+                case previewStatus.default:
+                case previewStatus.error:
+                    env.imageError = this.imageError;
+                    env.error = this.error.replace(/\n/g, "<br />");
+                    this._uiPreview.show("preview.html", env);
+                    break;
+                case previewStatus.processing:
+                    env.error = "";
+                    env.images = ["svg", "png"].reduce((p, c) => {
+                        if (p) return p;
+                        let exported = calculateExportPath(this.rendered, c);
+                        exported = addFileIndex(exported, 0, this.rendered.pageCount);
+                        return fs.existsSync(exported) ? env.images = `<img src="${fileToBase64(exported)}">` : "";
+                    }, "");
+                    this._uiPreview.show("preview.html", env);
+                    break;
+                default:
+                    break;
+            }
+        } catch (error) {
+            return error
+        }
+    }
+
+    private setUIStatus(status: string) {
+        this.previewPageStatus = status;
+    }
+
     //display processing tip
-    processing() {
+    private processing() {
         this.status = previewStatus.processing;
         this.updateWebView();
     }
-    register() {
+
+    private register() {
         let disposable: vscode.Disposable;
 
         //register command
@@ -222,7 +230,7 @@ class Previewer extends vscode.Disposable {
                 let diagrams = diagramsOf(editor.document);
                 if (!diagrams.length) return;
 
-                //reset in case that starting commnad in none-diagram area, 
+                //reset in case that starting commnad in none-diagram area,
                 //or it may show last error image and may cause wrong "TargetChanged" result on cursor move.
                 this.reset();
                 this.TargetChanged;
@@ -251,7 +259,8 @@ class Previewer extends vscode.Disposable {
         this._uiPreview.addEventListener("open", () => this.startWatch());
         this._uiPreview.addEventListener("close", () => { this.stopWatch(); this.killTasks(); });
     }
-    startWatch() {
+
+    private startWatch() {
         let disposable: vscode.Disposable;
         let disposables: vscode.Disposable[] = [];
 
@@ -284,7 +293,8 @@ class Previewer extends vscode.Disposable {
 
         this.watchDisposables = disposables;
     }
-    stopWatch() {
+
+    private stopWatch() {
         for (let d of this.watchDisposables) {
             d.dispose();
         }

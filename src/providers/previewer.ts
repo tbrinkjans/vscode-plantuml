@@ -80,18 +80,15 @@ class Previewer extends vscode.Disposable {
         this.error = "";
     }
 
-    private get TargetChanged(): boolean {
-        let current = currentDiagram();
-        if (!current) return false;
-        let changed = (!this.rendered || !this.rendered.isEqual(current));
-        if (changed) {
-            this.rendered = current;
-            this.error = "";
-            this.images = [];
-            this.imageError = "";
-            this.previewPageStatus = "";
-        }
-        return changed;
+    private targetChanged(diagram: Diagram): boolean {
+        if (!diagram) return false;
+        if (!this.rendered) return true;
+        return !this.rendered.isEqual(diagram);
+    }
+
+    private updateTarget(diagram: Diagram) {
+        this.reset();
+        this.rendered = diagram;
     }
 
     private async update(processingTip: boolean) {
@@ -110,6 +107,9 @@ class Previewer extends vscode.Disposable {
             this.images = [];
             this.updateWebView();
             return;
+        }
+        if (this.targetChanged(diagram)) {
+            this.updateTarget(diagram);
         }
         let task: RenderTask = exportToBuffer(diagram, "svg");
         this.task = task;
@@ -231,9 +231,9 @@ class Previewer extends vscode.Disposable {
                 if (!diagrams.length) return;
 
                 //reset in case that starting commnad in none-diagram area,
-                //or it may show last error image and may cause wrong "TargetChanged" result on cursor move.
+                //or it may show last error image and may cause wrong "targetChanged" result on cursor move.
                 this.reset();
-                this.TargetChanged;
+
                 //update preview
                 await this.update(true);
             } catch (error) {
@@ -284,7 +284,8 @@ class Previewer extends vscode.Disposable {
             lastTimestamp = new Date().getTime();
             setTimeout(() => {
                 if (new Date().getTime() - lastTimestamp >= 400) {
-                    if (!this.TargetChanged) return;
+                    const diagram = currentDiagram();
+                    if (!this.targetChanged(diagram)) return;
                     this.update(true);
                 }
             }, 500);

@@ -301,5 +301,12 @@ class Previewer extends vscode.Disposable {
         }
         this.watchDisposables = [];
     }
+
+    async showSource() {
+        if (!this.rendered) return;
+        const { document, start, viewColumn } = this.rendered;
+        const selection = new vscode.Range(start, start);
+        await vscode.window.showTextDocument(document, { selection, viewColumn });
+    }
 }
 export const previewer = new Previewer();

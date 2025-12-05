@@ -227,7 +227,7 @@ class Previewer extends vscode.Disposable {
             try {
                 var editor = vscode.window.activeTextEditor;
                 if (!editor) return;
-                let diagrams = diagramsOf(editor.document);
+                let diagrams = diagramsOf(editor.document, editor.viewColumn);
                 if (!diagrams.length) return;
 
                 //reset in case that starting commnad in none-diagram area,
